@@ -1,10 +1,12 @@
-from setuptools import setup, find_packages
+from distutils.core import setup
+
+version = bytes(__import__('graphlib').get_version())
 
 kwargs = {
-    'packages': find_packages(),
+    'packages': ['graphlib'],
     'test_suite': 'test_suite',
     'name': 'graphlib',
-    'version': __import__('graphlib').get_version(),
+    'version': version,
     'author': 'Byron Ruth',
     'author_email': 'b@devel.io',
     'description': 'Graph API',
@@ -15,11 +17,12 @@ kwargs = {
         'Development Status :: 4 - Beta',
         'License :: OSI Approved :: BSD License',
         'Intended Audience :: Developers',
+        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.0',
-        'Programming Language :: Python :: 3.1',
+        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
+        'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 }
 
