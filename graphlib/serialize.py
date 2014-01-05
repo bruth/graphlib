@@ -1,6 +1,12 @@
 from __future__ import unicode_literals, absolute_import
 from .graph import Node, Rel
 
+# Alias str to unicode with unicode_literals imported
+try:
+    str = unicode
+except NameError:
+    pass
+
 
 class Serializer(object):
     """Serializer to a data structure compatible with the JSON Graph

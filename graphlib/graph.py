@@ -3,7 +3,7 @@ import re
 import inspect
 from collections import defaultdict
 
-
+# Alias str to unicode with unicode_literals imported
 try:
     str = unicode
 except NameError:
@@ -195,7 +195,7 @@ class Node(Props):
             return Rels(rels)
 
         assert isinstance(node, Node), 'end node must be a Node instance'
-        assert isinstance(type, str), 'type must be a string'
+        assert isinstance(type, (str, bytes)), 'type must be a string'
         if type in self._types and node.id in self._types[type]:
             rel = self._rels[node.id][type]
             if props:
@@ -269,7 +269,7 @@ class DictSeq(tuple):
         """
         if isinstance(key, (int, slice)):
             return tuple.__getitem__(self, key)
-        elif isinstance(key, str):
+        elif isinstance(key, (str, bytes)):
             key = key.lower()
         elif hasattr(key, '__iter__'):
             return Nodes(self[_key] for _key in key)
@@ -281,7 +281,7 @@ class DictSeq(tuple):
         The most common filtering is by property, so a key and value can be
         supplied as a shorthand, otherwise a filter function must be passed.
         """
-        if isinstance(key, str):
+        if isinstance(key, (str, bytes)):
             def func(item):
                 if key in item:
                     if value is not None:
