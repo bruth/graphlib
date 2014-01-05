@@ -26,12 +26,16 @@ class Serializer(object):
 
     def _add_node(self, node):
         data = {'props': node.serialize()}
+
         if node.labels:
             data['labels'] = list(node.labels)
+
         if node.match_props is not None:
             data['match'] = node.match_props
+
         if node.update_props is not None:
             data['update'] = node.update_props
+
         self.data['nodes'].append(data)
         self.indexes[node.id] = self.node_index
         self.node_index += 1
@@ -43,10 +47,13 @@ class Serializer(object):
             'type': rel.type,
             'props': rel.serialize()
         }
+
         if rel.match_props is not None:
             data['match'] = rel.match_props
+
         if rel.update_props is not None:
             data['update'] = rel.update_props
+
         self.data['rels'].append(data)
         self.indexes[rel.id] = self.rel_index
         self.rel_index += 1
@@ -82,6 +89,7 @@ class Serializer(object):
         else:
             raise TypeError('unable to prepare objects with type "{}"'
                             .format(type(node)))
+
         return self.data
 
 

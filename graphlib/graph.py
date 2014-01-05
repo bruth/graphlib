@@ -35,6 +35,7 @@ class Props(object):
             self.props = props
         else:
             self.props = dict(props)
+
         self.id = uid()
 
     def __str__(self):
@@ -188,6 +189,7 @@ class Node(Props):
         "Adds a relationship to node if it does not already exist."
         if reltype is None:
             reltype = self.reltype
+
         if isinstance(node, (list, tuple)):
             rels = []
             for _node in node:
@@ -196,6 +198,7 @@ class Node(Props):
 
         assert isinstance(node, Node), 'end node must be a Node instance'
         assert isinstance(type, (str, bytes)), 'type must be a string'
+
         if type in self._types and node.id in self._types[type]:
             rel = self._rels[node.id][type]
             if props:
@@ -203,6 +206,7 @@ class Node(Props):
         else:
             rel = reltype(self, node, type, props)
             self._add_rel(rel)
+
         return rel
 
     def unrelate(self, node=None, type=None):
@@ -215,14 +219,17 @@ class Node(Props):
             count = self._del_rels_for_type(type)
         else:
             count = self._del_rels()
+
         self._prune()
         return count
 
     def related(self, node, type=None):
         "Returns true if the node is related, optionally by a type."
         related = node.id in self._rels or self.id in node._rels
+
         if related and type:
             return type in self._rels[node.id] or type in node._rels[self.id]
+
         return related
 
     def rels(self, node=None, type=None):
@@ -235,6 +242,7 @@ class Node(Props):
             rels = self._get_rels_for_type(type)
         else:
             rels = self._get_rels()
+
         return Rels(rels)
 
 
@@ -252,11 +260,14 @@ class DictSeq(tuple):
         "Equality based on the items contained."
         if not hasattr(other, '__iter__'):
             return False
+
         if len(self) != len(other):
             return False
+
         for i, x in enumerate(self):
             if other[i] != x:
                 return False
+
         return True
 
     def __ne__(self, other):
@@ -273,7 +284,9 @@ class DictSeq(tuple):
             key = key.lower()
         elif hasattr(key, '__iter__'):
             return Nodes(self[_key] for _key in key)
+
         key = self._map[key]
+
         return tuple.__getitem__(self, key)
 
     def filter(self, key, value=None):
@@ -292,6 +305,7 @@ class DictSeq(tuple):
             func = key
             if not inspect.isfunction(func):
                 raise TypeError('filter requires key/value or function')
+
         return self.__class__(filter(func, self))
 
     def match(self, regexp, flags=re.I):
