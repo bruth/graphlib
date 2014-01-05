@@ -1,4 +1,8 @@
 *.py?
 *.sw?
-htmlcov
+*.egg-info
 .coverage
+__pycache__
+MANIFEST
+htmlcov
+dist
