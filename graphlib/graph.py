@@ -94,6 +94,7 @@ class Rel(Props):
 
 class Node(Props):
     labels = None
+    reltype = Rel
 
     def __init__(self, props=None, labels=None):
         super(Node, self).__init__(props)
@@ -183,8 +184,10 @@ class Node(Props):
                 count += 1
         return count
 
-    def relate(self, node, type, props=None):
+    def relate(self, node, type, props=None, reltype=None):
         "Adds a relationship to node if it does not already exist."
+        if reltype is None:
+            reltype = self.reltype
         if isinstance(node, (list, tuple)):
             rels = []
             for _node in node:
@@ -198,7 +201,7 @@ class Node(Props):
             if props:
                 rel.update(props)
         else:
-            rel = Rel(self, node, type, props)
+            rel = reltype(self, node, type, props)
             self._add_rel(rel)
         return rel
 
