@@ -236,9 +236,9 @@ class Node(Props):
 
 
 class DictSeq(tuple):
-    """Immutable sequence of items which supports dict-like access. Nodes are
+    """Immutable sequence of items which supports dict-like access. Items are
     ordered in the order they were provided. They can be accessed by index
-    or by key, where the key is the `unicode` representation of the node.
+    or by key, where the key is the `str` representation of the item.
 
     Key-based accessed is case-insensitive.
     """
@@ -274,15 +274,15 @@ class DictSeq(tuple):
         return tuple.__getitem__(self, key)
 
     def filter(self, key, value=None):
-        """Filters the node in this container and returns a new container.
+        """Filters the items in this container and returns a new container.
         The most common filtering is by property, so a key and value can be
         supplied as a shorthand, otherwise a filter function must be passed.
         """
         if isinstance(key, str):
-            def func(node):
-                if key in node:
+            def func(item):
+                if key in item:
                     if value is not None:
-                        return node[key] == value
+                        return item[key] == value
                     return True
                 return False
         else:
@@ -292,7 +292,7 @@ class DictSeq(tuple):
         return self.__class__(filter(func, self))
 
     def match(self, regexp, flags=re.I):
-        "Returns one or more nodes that match the regexp on the key."
+        "Returns one or more items that match the regexp on the key."
         r = re.compile(regexp, flags)
         return self.__class__(self[key] for key in self._map if r.match(key))
 
