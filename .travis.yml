@@ -5,6 +5,9 @@ python:
     - "3.2"
     - "3.3"
 
+before_install:
+    - sh tests/start-neo4j-2.0.0.sh
+
 install:
     - pip install -q coveralls --use-mirrors
     - pip install flake8
