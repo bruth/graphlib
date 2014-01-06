@@ -28,13 +28,19 @@ class Props(object):
     match_props = None
     update_props = None
 
-    def __init__(self, props=None):
+    def __init__(self, props=None, match_props=None, update_props=None):
         if props is None:
             self.props = {}
         elif isinstance(props, dict):
             self.props = props
         else:
             self.props = dict(props)
+
+        # Override class-defined properties
+        if match_props:
+            self.match_props = match_props
+        if update_props:
+            self.update_props = update_props
 
         self.id = uid()
 
@@ -68,13 +74,11 @@ class Props(object):
 
 
 class Rel(Props):
-    __slots__ = ('id', 'start', 'end', 'type', 'props')
-
-    def __init__(self, start, end, type, props=None):
-        super(Rel, self).__init__(props)
+    def __init__(self, start, end, type, *args, **kwargs):
         self.start = start
         self.end = end
         self.type = type
+        super(Rel, self).__init__(*args, **kwargs)
 
     def __repr__(self):
         return '{}({}-{}-{})'.format(self.__class__.__name__, self.start,
@@ -97,8 +101,13 @@ class Node(Props):
     labels = None
     reltype = Rel
 
-    def __init__(self, props=None, labels=None):
-        super(Node, self).__init__(props)
+    def __init__(self, *args, **kwargs):
+        labels = kwargs.pop('labels', None)
+
+        # Override class-defined labels
+        if labels:
+            self.labels = labels
+
         # Nested hash of relationships by node id then type. Currently a
         # only a single relationship of the same type can be defined between
         # the same two nodes.
@@ -106,6 +115,8 @@ class Node(Props):
 
         # Hash of relationship types with a set of node ids.
         self._types = defaultdict(set)
+
+        super(Node, self).__init__(*args, **kwargs)
 
     def __repr__(self):
         return "{}('{}')".format(self.__class__.__name__, self)
@@ -185,16 +196,15 @@ class Node(Props):
                 count += 1
         return count
 
-    def relate(self, node, type, props=None, reltype=None):
+    def relate(self, node, type, props=None, **kwargs):
         "Adds a relationship to node if it does not already exist."
-        if reltype is None:
-            reltype = self.reltype
-
         if isinstance(node, (list, tuple)):
             rels = []
             for _node in node:
-                rels.append(self.relate(_node, type, props))
+                rels.append(self.relate(_node, type, props, **kwargs))
             return Rels(rels)
+
+        reltype = kwargs.pop('reltype', self.reltype)
 
         assert isinstance(node, Node), 'end node must be a Node instance'
         assert isinstance(type, (str, bytes)), 'type must be a string'
@@ -204,7 +214,7 @@ class Node(Props):
             if props:
                 rel.update(props)
         else:
-            rel = reltype(self, node, type, props)
+            rel = reltype(self, node, type, props=props, **kwargs)
             self._add_rel(rel)
 
         return rel
