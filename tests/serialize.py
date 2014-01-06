@@ -1,4 +1,5 @@
 from __future__ import unicode_literals, absolute_import
+
 import unittest
 from graphlib import Node, Serializer, serialize
 
@@ -39,5 +40,5 @@ class SerializeTestCase(unittest.TestCase):
         self.assertEqual(len(s.data['nodes']), 7)
         self.assertEqual(len(s.data['rels']), 6)
 
-        # Same output as the shorthand method
-        self.assertEqual(s.data, serialize(n))
+    def test_serialize(self):
+        self.assertTrue(serialize(Node()))
