@@ -99,7 +99,7 @@ class Rel(Props):
 
 class Node(Props):
     labels = None
-    reltype = Rel
+    relclass = Rel
 
     def __init__(self, *args, **kwargs):
         labels = kwargs.pop('labels', None)
@@ -204,7 +204,7 @@ class Node(Props):
                 rels.append(self.relate(_node, type, props, **kwargs))
             return Rels(rels)
 
-        reltype = kwargs.pop('reltype', self.reltype)
+        relclass = kwargs.pop('relclass', self.relclass)
 
         assert isinstance(node, Node), 'end node must be a Node instance'
         assert isinstance(type, (str, bytes)), 'type must be a string'
@@ -214,7 +214,7 @@ class Node(Props):
             if props:
                 rel.update(props)
         else:
-            rel = reltype(self, node, type, props=props, **kwargs)
+            rel = relclass(self, node, type, props=props, **kwargs)
             self._add_rel(rel)
 
         return rel
