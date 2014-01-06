@@ -1,5 +1,3 @@
-from __future__ import unicode_literals, absolute_import
-
 __version_info__ = {
     'major': 0,
     'minor': 9,

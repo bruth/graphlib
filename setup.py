@@ -1,6 +1,6 @@
 from distutils.core import setup
 
-version = bytes(__import__('graphlib').get_version())
+version = __import__('graphlib').get_version()
 
 kwargs = {
     'packages': ['graphlib'],
