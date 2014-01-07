@@ -16,6 +16,7 @@ class Serializer(object):
     See https://github.com/bruth/json-graph-spec for more information.
     """
     def __init__(self):
+        self.stack = []
         self.indexes = {}
         self.data = {
             'nodes': [],
@@ -68,27 +69,33 @@ class Serializer(object):
 
             self._add_rel(rel)
 
-    def _serialize_node(self, node, traverse=True):
+    def _serialize_node(self, node, traverse):
         if node.id not in self.indexes:
             self._add_node(node)
 
         if traverse:
             for rel in node.rels():
-                self._serialize_node(rel.end, traverse=traverse)
-                self._serialize_rel(rel)
+                self.stack.append(rel.end)
+                self.stack.append(rel)
 
-    def serialize(self, node, traverse=True):
+    def _serialize(self, item, traverse):
+        if isinstance(item, Node):
+            self._serialize_node(item, traverse)
+        else:
+            self._serialize_rel(item)
+
+    def serialize(self, item, traverse=True):
         "Prepares a node or relationship for export."
-        if isinstance(node, Node):
-            self._serialize_node(node, traverse=traverse)
-        elif isinstance(node, Rel):
-            self._serialize_rel(node)
-        elif isinstance(node, (tuple, list)):
-            for item in node:
-                self.serialize(item, traverse=traverse)
+        if isinstance(item, (Node, Rel)):
+            self.stack.append(item)
+        elif isinstance(item, (tuple, list)):
+            self.stack.extend(item)
         else:
             raise TypeError('unable to prepare objects with type "{}"'
-                            .format(type(node)))
+                            .format(type(item)))
+
+        while self.stack:
+            self._serialize(self.stack.pop(), traverse)
 
         return self.data
 
