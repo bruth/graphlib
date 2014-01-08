@@ -19,17 +19,14 @@ The object API makes it simple to create nodes and relationships between them.
 ```python
 from graphlib import Node
 
-office = Node()
-jane = Node()
-john = Node()
-bob = Node()
+city = Node({'location': 'Philadelphia'})
+jane = Node({'name': 'Jane'})
+john = Node({'name': 'John'})
+bob = Node({'name': 'Bob'})
 
-jane.relate(office, 'WORKS_IN')
-john.relate(office, 'WORKS_IN')
-bob.relate(office, 'WORKS_IN')
-
-jane.relate([john, bob], 'MANAGES')
-john.relate(bob, 'WORKS_WITH')
+city.relate([jane, john, bob], 'LIVES_IN')
+jane.relate(john, 'MARRIED_TO')
+john.relate(bob, 'FRIENDS_WITH')
 ```
 
 ### Serialize
@@ -39,7 +36,7 @@ Serializes the object reprsentations into dicts and lists which can be encoded a
 ```python
 from graphlib import serialize
 
-data = serialize(office)
+data = serialize(city)
 ```
 
 ### Load
