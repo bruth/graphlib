@@ -31,7 +31,7 @@ class Neo4jParserTestCase(unittest.TestCase):
 
     def test_parse_create_node(self):
         n = Node({'foo': None})
-        s = 'CREATE (x0 )'
+        s = 'CREATE (x0)'
         self.assertEqual(neo4j.parse(serialize(n))[0], s)
 
         n['foo'] = 1
@@ -61,12 +61,13 @@ class Neo4jParserTestCase(unittest.TestCase):
 
     def test_parse_create_rel(self):
         r = Node().relate(Node(), 'TO')
-        s = 'CREATE (x0)-[:TO ]->(x1)'
+        s = 'MERGE (x0)-[x2:TO]->(x1)'
         # Third statement.. after creating the nodes
         self.assertEqual(neo4j.parse(serialize(r))[2], s)
 
         r['foo'] = 1
         r['bar'] = 'a'
+        r.match_props = False
         s = "CREATE (x0)-[:TO {bar: 'a', foo: 1}]->(x1)"
         # Third statement.. after creating the nodes
         self.assertEqual(neo4j.parse(serialize(r))[2], s)
@@ -74,7 +75,7 @@ class Neo4jParserTestCase(unittest.TestCase):
     def test_parse_merge_rel(self):
         n = Node()
         r = n.relate(Node(), 'TO', {'foo': 1, 'bar': 'a'}, match_props=['foo'])
-        s = "MERGE (x0)-[x2:TO]->(x1) " \
+        s = "MERGE (x0)-[x2:TO {foo: 1}]->(x1) " \
             "ON CREATE SET x2 = {bar: 'a', foo: 1} " \
             "ON MATCH SET x2.bar = 'a', x2.foo = 1"
         # Third statement.. after creating the nodes

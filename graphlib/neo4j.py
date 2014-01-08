@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from __future__ import unicode_literals, absolute_import
 
 try:
@@ -15,131 +17,135 @@ except NameError:
 
 import json
 
+
 # Default URI to Neo4j REST endpoint
 DEFAULT_URI = 'http://localhost:7474/db/data/'
 
 # Endpoint for the single transaction
 TRANSACTION_URI_TMPL = '{}transaction/commit'
 
-# Cypher statement template for creating a node.
-CREATE_NODE_STMT = 'CREATE ({r}{labels} {props})'
+# Cypher statement template for a node
+CREATE_NODE_STMT = 'CREATE ({ref}{labels}{props})'
+MERGE_NODE_STMT = 'MERGE ({ref}{labels}{props}){oncreate}{onmatch}'
 
-# Cypher statement template for ensuring a node based.
-MERGE_NODE_STMT = 'MERGE ({r}{labels} {props}) {oncreate} {onmatch}'
+# Cypher statement template for a relationship
+CREATE_REL_STMT = 'CREATE ({start})-[:{rtype}{props}]->({end})'
+MERGE_REL_STMT = 'MERGE ({start})-[{ref}:{rtype}{props}]->({end}){oncreate}{onmatch}'  # noqa
 
-# Cypher statement template for creating a relationship between nodes.
-CREATE_REL_STMT = 'CREATE ({r1})-[:{rtype} {props}]->({r2})'
-
-# Cypher statement template for ensuring a relationship between nodes.
-MERGE_REL_STMT = 'MERGE ({r1})-[{r}:{rtype}]->({r2}) {oncreate} {onmatch}'
+# Supported property value types:
+# http://docs.neo4j.org/chunked/2.0.0/graphdb-neo4j-properties.html
+VALID_TYPES = (bool, int, float, str, bytes)
 
 
-class CypherStatementFactory(object):
-    """Produces statements and tracks references to previously matched
-    nodes and relationships.
+def cref(index):
+    "Returns a Cypher reference name based on a positional index."
+    return 'x{}'.format(index)
 
-    This enables constructing one large statement rather than doing many
-    subsequent lookups which is optimized for bulk imports.
-    """
-    def ref(self, index):
-        return 'x{}'.format(index)
 
-    def _dict_props(self, props):
-        "Converts a dict into a valid properties object in Cypher syntax."
-        toks = []
+def stringify(value):
+    if isinstance(value, list):
+        return '[' + ', '.join([stringify(v) for v in value]) + ']'
+    if isinstance(value, (str, bytes)):
+        return repr(value).lstrip('u')
+    if isinstance(value, bool):
+        return 'true' if True else 'false'
+    return repr(value)
 
-        for key, value in sorted(props.items()):
-            if value is None:
-                continue
-            if isinstance(value, (str, bytes)):
-                s = "{}: '{}'"
-            else:
-                s = '{}: {}'
-            toks.append(s.format(key, value))
 
-        if not toks:
-            return ''
+def dict_props(props):
+    "Converts a dict into a valid properties object in Cypher syntax."
+    if not props:
+        return ''
 
-        return '{{{}}}'.format(', '.join(toks))
+    toks = []
 
-    def _keyword_props(self, ref, props):
-        "Converts a dict into an array of valid assignments in Cypher syntax."
-        toks = []
+    for key, value in sorted(props.items()):
+        toks.append("{}: {}".format(key, stringify(value)))
 
-        for key, value in sorted(props.items()):
-            if value is None:
-                continue
-            if isinstance(value, (str, bytes)):
-                s = "{}.{} = '{}'"
-            else:
-                s = '{}.{} = {}'
-            toks.append(s.format(ref, key, value))
+    return ' {{{}}}'.format(', '.join(toks))
 
-        if not toks:
-            return ''
 
-        return ', '.join(toks)
+def keyword_props(ref, props):
+    "Converts a dict into an array of valid assignments in Cypher syntax."
+    if not props:
+        return ''
 
-    def _labels_stmt(self, labels):
-        if not labels:
-            return ''
-        return ':' + ':'.join(labels)
+    toks = []
 
-    def _oncreate_stmt(self, ref, props):
-        props = self._dict_props(props)
-        return 'ON CREATE SET {} = {}'.format(ref, props)
+    for key, value in sorted(props.items()):
+        toks.append('{}.{} = {}'.format(ref, key, stringify(value)))
 
-    def _onmatch_stmt(self, ref, props, replace):
-        if replace:
-            props = self._dict_props(props)
-            return 'ON MATCH SET {} = {}'.format(ref, props)
-        props = self._keyword_props(ref, props)
-        return 'ON MATCH SET {}'.format(props)
+    return ' ' + ', '.join(toks)
 
-    def create_node(self, index, props, labels=None):
-        ref = self.ref(index)
-        labels = self._labels_stmt(labels)
-        props = self._dict_props(props)
-        return CREATE_NODE_STMT.format(r=ref, labels=labels, props=props)
 
-    def merge_node(self, index, props, cprops=None, uprops=None, labels=None,
+def labels_suffix(labels):
+    "Returns the suffix of node labels."
+    if not labels:
+        return ''
+    return ':' + ':'.join(labels)
+
+
+def oncreate_stmt(ref, props):
+    if not props:
+        return ''
+    props = dict_props(props)
+    return ' ON CREATE SET {} ={}'.format(ref, props)
+
+
+def onmatch_stmt(ref, props, replace):
+    if not props:
+        return ''
+
+    if replace:
+        props = dict_props(props)
+        return ' ON MATCH SET {} ={}'.format(ref, props)
+
+    props = keyword_props(ref, props)
+    return ' ON MATCH SET{}'.format(props)
+
+
+def create_node_stmt(index, props, labels=None):
+    ref = cref(index)
+    labels = labels_suffix(labels)
+    props = dict_props(props)
+
+    return CREATE_NODE_STMT.format(ref=ref, labels=labels, props=props)
+
+
+def merge_node_stmt(index, props, cprops=None, uprops=None, labels=None,
+                    replace=False):
+    ref = cref(index)
+    labels = labels_suffix(labels)
+    props = dict_props(props)
+    oncreate = oncreate_stmt(ref, cprops)
+    onmatch = onmatch_stmt(ref, uprops, replace)
+
+    return MERGE_NODE_STMT.format(ref=ref, labels=labels, props=props,
+                                  oncreate=oncreate, onmatch=onmatch)
+
+
+def create_rel_stmt(index, n1, rtype, n2, props=None):
+    ref = cref(index)
+    start = cref(n1)
+    end = cref(n2)
+    props = dict_props(props)
+
+    return CREATE_REL_STMT.format(ref=ref, start=start, end=end, rtype=rtype,
+                                  props=props)
+
+
+def merge_rel_stmt(index, n1, rtype, n2, props=None, cprops=None, uprops=None,
                    replace=False):
+    ref = cref(index)
+    start = cref(n1)
+    end = cref(n2)
+    props = dict_props(props)
+    oncreate = oncreate_stmt(ref, cprops)
+    onmatch = onmatch_stmt(ref, uprops, replace)
 
-        ref = self.ref(index)
-        labels = self._labels_stmt(labels)
-        props = self._dict_props(props)
-
-        oncreate = self._oncreate_stmt(ref, cprops)
-        onmatch = self._onmatch_stmt(ref, uprops, replace)
-
-        return MERGE_NODE_STMT.format(r=ref,
-                                      labels=labels,
-                                      props=props,
-                                      oncreate=oncreate,
-                                      onmatch=onmatch)
-
-    def create_rel(self, index, n1, rtype, n2, props=None):
-        ref = self.ref(index)
-        ref1 = self.ref(n1)
-        ref2 = self.ref(n2)
-        props = self._dict_props(props)
-        return CREATE_REL_STMT.format(r=ref, r1=ref1, r2=ref2,
-                                      rtype=rtype, props=props)
-
-    def merge_rel(self, index, n1, rtype, n2, props=None, cprops=None,
-                  uprops=None, replace=False):
-
-        ref = self.ref(index)
-        ref1 = self.ref(n1)
-        ref2 = self.ref(n2)
-        props = self._dict_props(props)
-
-        oncreate = self._oncreate_stmt(ref, cprops)
-        onmatch = self._onmatch_stmt(ref, uprops, replace)
-
-        return MERGE_REL_STMT.format(r=ref, r1=ref1, r2=ref2,
-                                     rtype=rtype, oncreate=oncreate,
-                                     onmatch=onmatch)
+    return MERGE_REL_STMT.format(ref=ref, start=start, end=end, rtype=rtype,
+                                 props=props, oncreate=oncreate,
+                                 onmatch=onmatch)
 
 
 def send_request(uri, statements):
@@ -163,36 +169,70 @@ def send_request(uri, statements):
 
 
 def pick(props, keys):
+    "Returns a subset of properties given keys."
     picked = {}
+
     for key in keys:
-        try:
-            picked[key] = props[key]
-        except KeyError:
-            raise KeyError('"{}" does not exist in properties'.format(key))
+        if key not in props:
+            raise KeyError('{} does not exist in properties'.format(repr(key)))
+        picked[key] = props[key]
+
     return picked
+
+
+def check_prop_type(value):
+    "Checks if value is a valid Neo4j primitive and raises an error if not."
+    if not isinstance(value, VALID_TYPES):
+        raise TypeError('{value} is not supported by Neo4j'
+                        .format(repr(value)))
+    return value
+
+
+def clean_props(props):
+    """Cleans a dict of property values. This removes keys with None values
+    and ensure the values are primitives or a list of primitives supported by
+    Neo4j.
+    """
+    if not props:
+        return
+
+    copy = {}
+
+    for key, value in props.items():
+        if value is None:
+            continue
+
+        if not isinstance(key, (str, bytes)):
+            raise TypeError('property key {} must be a string'.format(key))
+
+        # Handle lists
+        if isinstance(value, (list, tuple)):
+            value = [check_prop_type(v) for v in value]
+        else:
+            value = check_prop_type(value)
+
+        copy[key] = value
+
+    return copy
 
 
 def parse_match_props(match, props):
     if not match:
         return {}
-    elif isinstance(match, dict):
-        return match
-    elif isinstance(match, list):
+    elif isinstance(match, (list, tuple)):
         return pick(props, match)
-    raise ValueError('match must be None, False, a list, or a dict')
+    raise ValueError('match must be None, False, or a list of keys')
 
 
 def parse_update_props(update, props):
     if not update:
         return props
-    elif isinstance(update, dict):
-        return update
-    elif isinstance(update, list):
+    elif isinstance(update, (list, tuple)):
         return pick(props, update)
-    raise ValueError('update must be None, a list, or a dict')
+    raise ValueError('update must be None or a list of keys')
 
 
-def parse_node(index, node, factory):
+def parse_node(index, node):
     props = node.get('props', {})
     match = node.get('match')
     update = node.get('update')
@@ -201,20 +241,23 @@ def parse_node(index, node, factory):
 
     assert type(replace) is bool, 'replace must be a boolean'
 
+    # Clean the properties and ensure the values are valid
+    props = clean_props(props)
+
     mprops = parse_match_props(match, props)
 
-    # Force create the node
+    # Force create the node if matching is disabled or no
+    # properties exist to match on.
     if match is False or not mprops:
-        return factory.create_node(index, props, labels=labels)
+        return create_node_stmt(index, props, labels=labels)
 
     uprops = parse_update_props(update, props)
 
-    return factory.merge_node(index, mprops, cprops=props,
-                              uprops=uprops, labels=labels,
-                              replace=replace)
+    return merge_node_stmt(index, mprops, cprops=props, uprops=uprops,
+                           labels=labels, replace=replace)
 
 
-def parse_rel(index, rel, factory, bound):
+def parse_rel(index, rel, bound):
     start = int(rel.get('start'))
     end = int(rel.get('end'))
     rtype = rel.get('type')
@@ -230,41 +273,115 @@ def parse_rel(index, rel, factory, bound):
 
     assert type(replace) is bool, 'replace must be a boolean'
 
-    mprops = parse_match_props(match, props)
+    # Clean the properties and ensure the values are valid
+    props = clean_props(props)
 
-    # Force create the node
-    if match is False or not mprops:
-        return factory.create_rel(index, start, rtype, end, props)
+    # Force create the relationship is match is disabled
+    if match is False:
+        return create_rel_stmt(index, start, rtype, end, props)
+
+    if match:
+        mprops = parse_match_props(match, props)
+    else:
+        mprops = None
 
     uprops = parse_update_props(update, props)
 
-    return factory.merge_rel(index, start, rtype, end, mprops,
-                             cprops=props, uprops=uprops, replace=replace)
+    return merge_rel_stmt(index, start, rtype, end, mprops, cprops=props,
+                          uprops=uprops, replace=replace)
 
 
-def parse(data):
-    factory = CypherStatementFactory()
+def _parse_dict_schema(data, stream):
+    "Parses a dict-based format with `nodes` and `rels` arrays."
     statements = []
 
     nodes = data.get('nodes', ())
     rels = data.get('rels', ())
 
     for index, node in enumerate(nodes):
-        stmt = parse_node(index, node, factory)
-        statements.append(stmt)
+        stmt = parse_node(index, node)
+        if stream:
+            print(stmt)
+        else:
+            statements.append(stmt)
 
     # References to nodes in relationships cannot exceed
-    # this upper bound, offset if for references in factory
+    # this upper bound, offset if for generating references
     offset = len(nodes)
     bound = offset - 1
 
     for index, rel in enumerate(rels):
-        stmt = parse_rel(offset + index, rel, factory, bound)
-        statements.append(stmt)
+        stmt = parse_rel(offset + index, rel, bound)
+        if stream:
+            print(stmt)
+        else:
+            statements.append(stmt)
 
     return statements
+
+
+def _parse_array_schema(data, stream):
+    """Parses the array-based format where nodes and relationships are
+    interleaved.
+    """
+    statements = []
+
+    for index, item in enumerate(data):
+        if 'type' in item:
+            stmt = parse_rel(index, item, index)
+        else:
+            stmt = parse_node(index, item)
+        if stream:
+            print(stmt)
+        else:
+            statements.append(stmt)
+
+    return statements
+
+
+def parse(data, stream=False):
+    if isinstance(data, dict):
+        return _parse_dict_schema(data, stream)
+    elif isinstance(data, (list, tuple)):
+        return _parse_array_schema(data, stream)
+    raise ValueError('Invalid format. Must be a dict or list/tuple')
 
 
 def load(data, uri=DEFAULT_URI):
     statements = parse(data)
     return send_request(uri, statements)
+
+
+if __name__ == '__main__':
+    import sys
+
+    args = sys.argv[1:]
+
+    if '--load' in args:
+        args.remove('--load')
+        _load = True
+    else:
+        _load = False
+
+    # Path to JSON file, otherwise assume stdin
+    if args:
+        with open(args.pop(0)) as f:
+            data = json.load(f)
+    else:
+        data = json.load(sys.stdin)
+
+    if _load:
+        # Args remaining, this should be a custom URI
+        if args:
+            uri = args[0]
+        else:
+            uri = None
+
+        output = load(data, uri=uri)
+
+        # Print errors if any were returned
+        if output['errors']:
+            print(output['errors'])
+            sys.exit(1)
+    else:
+        parse(data, stream=True)
