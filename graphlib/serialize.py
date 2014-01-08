@@ -18,12 +18,8 @@ class Serializer(object):
     def __init__(self):
         self.stack = []
         self.indexes = {}
-        self.data = {
-            'nodes': [],
-            'rels': [],
-        }
-        self.node_index = 0
-        self.rel_index = 0
+        self.items = []
+        self.index = 0
 
     def _add_node(self, node):
         data = {'props': node.serialize()}
@@ -37,9 +33,9 @@ class Serializer(object):
         if node.update_props is not None:
             data['update'] = node.update_props
 
-        self.data['nodes'].append(data)
-        self.indexes[node.id] = self.node_index
-        self.node_index += 1
+        self.items.append(data)
+        self.indexes[node.id] = self.index
+        self.index += 1
 
     def _add_rel(self, rel):
         data = {
@@ -55,9 +51,9 @@ class Serializer(object):
         if rel.update_props is not None:
             data['update'] = rel.update_props
 
-        self.data['rels'].append(data)
-        self.indexes[rel.id] = self.rel_index
-        self.rel_index += 1
+        self.items.append(data)
+        self.indexes[rel.id] = self.index
+        self.index += 1
 
     def _serialize_rel(self, rel):
         if rel.id not in self.indexes:
@@ -97,7 +93,7 @@ class Serializer(object):
         while self.stack:
             self._serialize(self.stack.pop(), traverse)
 
-        return self.data
+        return self.items
 
 
 def serialize(*args, **kwargs):

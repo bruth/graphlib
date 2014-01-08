@@ -37,8 +37,7 @@ class SerializeTestCase(unittest.TestCase):
 
         self.assertRaises(TypeError, s.serialize, None)
 
-        self.assertEqual(len(s.data['nodes']), 7)
-        self.assertEqual(len(s.data['rels']), 6)
+        self.assertEqual(len(s.items), 13)
 
     def test_serialize(self):
         self.assertTrue(serialize(Node()))

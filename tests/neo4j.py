@@ -53,7 +53,7 @@ class Neo4jParserTestCase(unittest.TestCase):
 
         # Replace properties on match
         d = serialize(n)
-        d['nodes'][0]['replace'] = True
+        d[0]['replace'] = True
         s = "MERGE (x0:Special {foo: 1}) " \
             "ON CREATE SET x0 = {bar: 'a', foo: 1} " \
             "ON MATCH SET x0 = {bar: 'a', foo: 1}"
