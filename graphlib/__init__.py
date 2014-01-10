@@ -20,4 +20,4 @@ __version__ = get_version()
 
 
 from .graph import Node, Nodes, Rel, Rels  # noqa
-from .serialize import serialize, Serializer  # noqa
+from .serializer import serialize, Serializer  # noqa
