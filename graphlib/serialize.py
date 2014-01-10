@@ -34,13 +34,13 @@ class Serializer(object):
             data['update'] = node.update_props
 
         self.items.append(data)
-        self.indexes[node.id] = self.index
+        self.indexes[node] = self.index
         self.index += 1
 
     def _add_rel(self, rel):
         data = {
-            'start': self.indexes[rel.start.id],
-            'end': self.indexes[rel.end.id],
+            'start': self.indexes[rel.start],
+            'end': self.indexes[rel.end],
             'type': rel.type,
             'props': rel.serialize()
         }
@@ -52,27 +52,31 @@ class Serializer(object):
             data['update'] = rel.update_props
 
         self.items.append(data)
-        self.indexes[rel.id] = self.index
+        self.indexes[rel] = self.index
         self.index += 1
 
     def _serialize_rel(self, rel):
-        if rel.id not in self.indexes:
-            if rel.start.id not in self.indexes:
+        if rel not in self.indexes:
+            if rel.start not in self.indexes:
                 self._add_node(rel.start)
 
-            if rel.end.id not in self.indexes:
+            if rel.end not in self.indexes:
                 self._add_node(rel.end)
 
             self._add_rel(rel)
 
     def _serialize_node(self, node, traverse):
-        if node.id not in self.indexes:
+        if node not in self.indexes:
             self._add_node(node)
 
         if traverse:
             for rel in node.rels():
-                self.stack.append(rel.end)
-                self.stack.append(rel)
+                if rel.start not in self.indexes:
+                    self.stack.append(rel.start)
+                if rel.end not in self.indexes:
+                    self.stack.append(rel.end)
+                if rel not in self.indexes:
+                    self.stack.append(rel)
 
     def _serialize(self, item, traverse):
         if isinstance(item, Node):
@@ -91,7 +95,8 @@ class Serializer(object):
                             .format(type(item)))
 
         while self.stack:
-            self._serialize(self.stack.pop(), traverse)
+            item = self.stack.pop()
+            self._serialize(item, traverse)
 
         return self.items
 

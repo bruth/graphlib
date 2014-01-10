@@ -1,4 +1,5 @@
 from __future__ import unicode_literals, absolute_import
+
 import sys
 import unittest
 from graphlib import Node, Nodes
@@ -21,68 +22,142 @@ class GraphTestCase(unittest.TestCase):
         self.assertFalse('one' in n)
 
     def test_iter(self):
-        self.assertEqual(list(Node()), [])
+        self.assertEqual(list(Node({'key': 'value'})), ['key'])
+
+    def test_parse_direction(self):
+        s = Node()
+        self.assertIsNone(s._parse_direction(incoming=True, outgoing=True))
+        self.assertIsNone(s._parse_direction())
+
+        self.assertEqual(s._parse_direction(direction=1), 1)
+        self.assertEqual(s._parse_direction(outgoing=True), 1)
+        self.assertEqual(s._parse_direction(outgoing=True), 1)
+        self.assertEqual(s._parse_direction(incoming=True), -1)
+
+    def test_degree(self):
+        n0 = Node()
+        n1 = Node()
+        n2 = Node()
+        n3 = Node()
+
+        self.assertEqual(n0.degree, 0)
+
+        n0.relate(n1, 'X')
+        self.assertEqual(n0.degree, 1)
+        self.assertEqual(n1.degree, 1)
+
+        n0.relate(n2, 'X')
+        self.assertEqual(n0.degree, 2)
+        self.assertEqual(n1.degree, 1)
+        self.assertEqual(n2.degree, 1)
+
+        n2.relate(n3, 'X')
+        self.assertEqual(n0.degree, 2)
+        self.assertEqual(n1.degree, 1)
+        self.assertEqual(n2.degree, 2)
+        self.assertEqual(n3.degree, 1)
 
     def test_relate(self):
-        n0, n1, n2, n3 = Node(), Node(), Node(), Node()
+        s = Node()
+        e = Node()
 
-        r0, r2 = n0.relate([n1, n2], 'CONTAINS')
-        r1, r3 = n0.relate([n1, n3], 'RELATED')
+        r = s.relate(e, 'YES', direction=1)
+        _r = e.relate(s, 'YES', direction=-1)
+        self.assertEqual(r, _r)
 
-        self.assertTrue(n0.related(n1))
-        self.assertTrue(n0.related(n2))
-        self.assertTrue(n0.related(n3, 'RELATED'))
+        # Any relationship
+        self.assertTrue(s.related(e))
+        self.assertTrue(e.related(s))
 
-        self.assertCountEqual(n0.rels(), [r0, r1, r2, r3])
-        self.assertCountEqual(n0.rels(node=n1), [r0, r1])
-        self.assertCountEqual(n0.rels(type='CONTAINS'), [r0, r2])
-        self.assertCountEqual(n0.rels(node=n1, type='RELATED'), [r1])
-        self.assertCountEqual(n0.rels(node=n0, type='FOO'), [])
+        # Specific relationship
+        self.assertTrue(s.related(e, 'YES'))
+        self.assertTrue(e.related(s, 'YES'))
 
-    def test_relate_type_once(self):
-        n0, n1 = Node(), Node()
+        self.assertFalse(s.related(e, 'NO'))
+        self.assertFalse(e.related(s, 'NO'))
 
-        r0 = n0.relate(n1, 'CONTAINS')
-        r0p = n0.relate(n1, 'CONTAINS', {'one': 1})
-        r0d = n0.relate(n1, 'CONTAINS')
-        self.assertEqual(r0p, r0)
-        self.assertEqual(r0d, r0)
-        self.assertEqual(r0p.props, {'one': 1})
-        self.assertEqual(r0d.props, {'one': 1})
+        # Specific direction
+        self.assertTrue(s.related(e, 'YES', outgoing=True))
+        self.assertTrue(e.related(s, 'YES', incoming=True))
 
-    def test_unrelate_node(self):
-        n0, n1, n2, n3 = Node(), Node(), Node(), Node()
+        self.assertFalse(s.related(e, 'YES', incoming=True))
+        self.assertFalse(e.related(s, 'YES', outgoing=True))
 
-        n0.relate([n1, n2, n3], 'CONTAINS')
-        n0.relate([n1, n2], 'RELATED')
+    def test_relate_multi(self):
+        s = Node()
+        o = Node()
+        t = Node()
+        s.relate([o, t], 'TRI')
 
-        # Node
-        self.assertEqual(n0.unrelate(n1), 2)
-        # Type
-        self.assertEqual(n0.unrelate(type='RELATED'), 1)
-        # Node and Type
-        self.assertEqual(n0.unrelate(n3, type='CONTAINS'), 1)
-        # All
-        self.assertEqual(n0.unrelate(), 1)
-        # None left
-        self.assertEqual(n0.unrelate(n1, type='RELATED'), 0)
+    def test_relate_rev(self):
+        s = Node()
+        e = Node()
 
-        self.assertFalse(n0.related(n1))
-        self.assertFalse(n0.related(n2))
-        self.assertFalse(n0.related(n3))
+        r = e.relate(s, '-', direction=-1)
+        _r = s.relate(e, '-', direction=1)
+        self.assertEqual(r, _r)
 
-        self.assertEqual(n0.rels(), [])
+    def test_relate_idempotent(self):
+        s = Node()
+        e = Node()
 
+        r0 = s.relate(e, 'YES')
+        r1 = s.relate(e, 'YES', {'one': 1})
+        r2 = s.relate(e, 'YES')
+        r3 = e.relate(s, 'YES', direction=-1)
 
-class RelTestCase(unittest.TestCase):
-    def test(self):
-        n0, n1 = Node(), Node()
-        r = n0.relate(n1, 'CONTAINS')
-        self.assertTrue(r.related())
-        r.unrelate()
-        self.assertFalse(r.related())
-        r.relate()
-        self.assertTrue(r.related())
+        self.assertEqual(r1, r0)
+        self.assertEqual(r2, r0)
+        self.assertEqual(r3, r0)
+
+        self.assertEqual(r0.props, {'one': 1})
+
+    def test_unrelate(self):
+        s = Node()
+        e = Node()
+        o = Node()
+
+        s.relate(e, 'A')
+        s.relate(e, 'B')
+        s.relate(e, 'C')
+        s.relate(o, 'B')
+        s.relate(o, 'D')
+
+        self.assertEqual(s.unrelate(e, 'A'), 1)
+        self.assertEqual(s.unrelate(e), 2)
+        self.assertEqual(s.unrelate(type='B'), 1)
+        self.assertEqual(s.unrelate(), 1)
+
+        e.relate(s, 'A')
+        s.relate(e, 'A')
+
+        self.assertEqual(s.unrelate(e, direction=1), 1)
+        self.assertEqual(s.unrelate(e, direction=-1), 1)
+
+    def test_rels(self):
+        s = Node()
+        e = Node()
+        o = Node()
+
+        r0 = s.relate(e, 'R')
+        r1 = s.relate(e, 'A', direction=-1)
+        r2 = s.relate(o, 'R')
+
+        self.assertCountEqual(s.rels(e), [r0, r1])
+        self.assertCountEqual(s.rels(e, direction=1), [r0])
+        self.assertCountEqual(s.rels(e, direction=-1), [r1])
+
+        self.assertCountEqual(s.rels(type='R'), [r0, r2])
+        self.assertCountEqual(s.rels(type='R', direction=1), [r0, r2])
+        self.assertCountEqual(s.rels(type='A', direction=-1), [r1])
+
+        self.assertCountEqual(s.rels(e, type='R'), [r0])
+        self.assertCountEqual(s.rels(e, type='R', direction=1), [r0])
+        self.assertCountEqual(s.rels(e, type='A', direction=-1), [r1])
+
+        self.assertCountEqual(s.rels(), [r0, r1, r2])
+        self.assertCountEqual(s.rels(direction=1), [r0, r2])
+        self.assertCountEqual(s.rels(direction=-1), [r1])
 
 
 class DictSeqTestCase(unittest.TestCase):

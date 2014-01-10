@@ -10,18 +10,8 @@ except NameError:
     pass
 
 
-class Uid(object):
-    "Unique id generator."
-    def __init__(self):
-        self.i = 0
-
-    def __call__(self):
-        i = self.i
-        self.i += 1
-        return i
-
-
-uid = Uid()
+OUTGOING = 1
+INCOMING = -1
 
 
 class Props(object):
@@ -41,14 +31,6 @@ class Props(object):
             self.match_props = match_props
         if update_props:
             self.update_props = update_props
-
-        self.id = uid()
-
-    def __str__(self):
-        return str(self.id)
-
-    def __repr__(self):
-        return '{}({})'.format(self.__class__.__name__, self.id)
 
     def __getitem__(self, key):
         return self.props[key]
@@ -81,23 +63,15 @@ class Rel(Props):
         super(Rel, self).__init__(*args, **kwargs)
 
     def __repr__(self):
-        return '{}({}-{}-{})'.format(self.__class__.__name__, self.start,
-                                     self.type, self.end)
-
-    def related(self):
-        "Returns true if this relationship is currently bound."
-        return self.start.related(self.end, self.type)
-
-    def unrelate(self):
-        "Disassociates this relationship from the start node."
-        return self.start.unrelate(self.end, type=self.type)
-
-    def relate(self):
-        "Reassociates this relationship to the start node."
-        self.start._add_rel(self)
+        return '{}({}-{}->{})'.format(self.__class__.__name__,
+                                      repr(self.start), self.type,
+                                      repr(self.end))
 
 
 class Node(Props):
+    """Node class which support properties and creating directed relationships
+    with other nodes.
+    """
     labels = None
     relclass = Rel
 
@@ -108,150 +82,283 @@ class Node(Props):
         if labels:
             self.labels = labels
 
-        # Nested hash of relationships by node id then type. Currently a
+        # Nested hash of relationships by node then type. Currently a
         # only a single relationship of the same type can be defined between
         # the same two nodes.
-        self._rels = defaultdict(dict)
+        # { nref : { type: rref } }
+        self._outgoing = defaultdict(dict)
+        self._incoming = defaultdict(dict)
 
-        # Hash of relationship types with a set of node ids.
+        # Hash of relationship types with a set of nodes regardless of
+        # direction. { type: { nref0, nref1, ... } }
         self._types = defaultdict(set)
 
         super(Node, self).__init__(*args, **kwargs)
 
     def __repr__(self):
-        return "{}('{}')".format(self.__class__.__name__, self)
+        return '{}({})'.format(self.__class__.__name__, id(self))
 
-    def _get_rels_for_type(self, type):
-        rels = []
-        for id in self._types[type]:
-            rels.append(self._rels[id][type])
+    def _rels_for_type(self, type, direction=None):
+        rels = set()
+
+        for node in self._types[type]:
+            if not direction or direction == OUTGOING:
+                if type in self._outgoing[node]:
+                    rels.add(self._outgoing[node][type])
+
+            if not direction or direction == INCOMING:
+                if type in self._incoming[node]:
+                    rels.add(self._incoming[node][type])
+
         return rels
 
-    def _get_rels_for_node(self, id):
-        rels = []
-        for type in self._rels[id]:
-            rels.append(self._rels[id][type])
+    def _rels_for_node(self, node, direction=None):
+        rels = set()
+
+        if not direction or direction == OUTGOING:
+            for type in self._outgoing[node]:
+                rels.add(self._outgoing[node][type])
+
+        if not direction or direction == INCOMING:
+            for type in self._incoming[node]:
+                rels.add(self._incoming[node][type])
+
         return rels
 
-    def _get_rels_for_node_and_type(self, id, type):
-        rel = self._rels[id].get(type)
-        if rel:
-            return [rel]
-        return []
+    def _rels_for_node_and_type(self, node, type, direction=None):
+        rels = set()
 
-    def _get_rels(self):
-        rels = []
-        for id in self._rels:
-            rels.extend(self._rels[id].values())
+        if not direction or direction == OUTGOING:
+            if type in self._outgoing[node]:
+                rels.add(self._outgoing[node][type])
+
+        if not direction or direction == INCOMING:
+            if type in self._incoming[node]:
+                rels.add(self._incoming[node][type])
+
+        return rels
+
+    def _rels(self, direction=None):
+        "Returns a set of rels for this node."
+        rels = set()
+
+        if not direction or direction == OUTGOING:
+            for node in self._outgoing:
+                rels.update(self._outgoing[node].values())
+
+        if not direction or direction == INCOMING:
+            for node in self._incoming:
+                rels.update(self._incoming[node].values())
+
         return rels
 
     def _add_rel(self, rel):
-        node = rel.end
-        self._rels[node.id][rel.type] = rel
-        self._types[rel.type].add(node.id)
+        "Adds a relation to the start and end node."
+        rel.start._outgoing[rel.end][rel.type] = rel
+        rel.start._types[rel.type].add(rel.end)
+        rel.end._incoming[rel.start][rel.type] = rel
+        rel.end._types[rel.type].add(rel.start)
 
-    def _prune(self):
-        "Removes empty entries in _rels and _types."
-        for id in list(self._rels):
-            if not self._rels[id]:
-                del self._rels[id]
+    def _remove_rel(sel, rel):
+        del rel.start._outgoing[rel.end][rel.type]
+        rel.start._types[rel.type].discard(rel.end)
+        del rel.end._incoming[rel.start][rel.type]
+        rel.end._types[rel.type].discard(rel.start)
 
-        for type in list(self._types):
-            if not self._types[type]:
-                del self._types[type]
+    def _del_rel(self, node, type, direction=None):
+        "Deletes a relationship for a node and a type."
+        count = 0
+        total = 0
 
-    def _del_rel(self, id, type):
-        del self._rels[id][type]
-        self._types[type].remove(id)
+        if type in self._outgoing[node]:
+            if not direction or direction == OUTGOING:
+                rel = self._outgoing[node][type]
+                self._remove_rel(rel)
+                count += 1
+            else:
+                total += 1
 
-    def _del_rels_for_type(self, type):
+        if type in self._incoming[node]:
+            if not direction or direction == INCOMING:
+                rel = self._incoming[node][type]
+                self._remove_rel(rel)
+                count += 1
+            else:
+                total += 1
+
+        # None left in either direction.
+        if total == 0:
+            self._types[type].discard(node)
+
+        return count
+
+    def _del_rels_for_node_and_type(self, node, type, direction=None):
+        "Deletes all relationships of type."
+        return self._del_rel(node, type, direction=direction)
+
+    def _del_rels_for_type(self, type, direction=None):
         "Deletes all relationships of type."
         count = 0
-        for id in tuple(self._types[type]):
-            self._del_rel(id, type)
-            count += 1
+
+        for node in tuple(self._types[type]):
+            count += self._del_rel(node, type, direction=direction)
+
         return count
 
-    def _del_rels_for_node(self, id):
+    def _del_rels_for_node(self, node, direction=None):
         "Deletes all relationships for node."
         count = 0
-        for type in list(self._rels[id]):
-            self._del_rel(id, type)
-            count += 1
+
+        if not direction or direction == OUTGOING:
+            for type in list(self._outgoing[node]):
+                count += self._del_rel(node, type, direction=OUTGOING)
+
+        if not direction or direction == INCOMING:
+            for type in list(self._incoming[node]):
+                count += self._del_rel(node, type, direction=INCOMING)
+
         return count
 
-    def _del_rels_for_node_and_type(self, id, type):
-        "Deletes relationship for node and type."
-        if id not in self._rels or type not in self._rels[id]:
-            return 0
-        self._del_rel(id, type)
-        return 1
-
-    def _del_rels(self):
+    def _del_rels(self, direction=None):
         "Deletes all relationships."
         count = 0
-        for id in list(self._rels):
-            for type in list(self._rels[id]):
-                self._del_rel(id, type)
-                count += 1
+
+        if not direction or direction == OUTGOING:
+            for node in list(self._outgoing):
+                for type in list(self._outgoing[node]):
+                    count += self._del_rel(node, type, direction=OUTGOING)
+
+        if not direction or direction == INCOMING:
+            for node in list(self._incoming):
+                for type in list(self._incoming[node]):
+                    count += self._del_rel(node, type, direction=INCOMING)
+
         return count
 
-    def relate(self, node, type, props=None, **kwargs):
+    def _parse_direction(self, **kwargs):
+        direction = kwargs.get('direction')
+
+        if direction:
+            assert direction == INCOMING or direction == OUTGOING, \
+                'A direction must be defined for the relationship'
+        else:
+            incoming = kwargs.get('incoming')
+            outgoing = kwargs.get('outgoing')
+
+            if incoming and outgoing:
+                direction = None
+            elif incoming:
+                direction = INCOMING
+            elif outgoing:
+                direction = OUTGOING
+            else:
+                direction = None
+
+        return direction
+
+    @property
+    def degree(self):
+        "Returns the number of neighboring nodes."
+        return len(self.neighbors)
+
+    @property
+    def neighbors(self):
+        "Returns the neighboring nodes."
+        s = set()
+        for type in self._types:
+            s |= self._types[type]
+        return Nodes(s)
+
+    def relate(self, node, type, props=None, direction=OUTGOING, **kwargs):
         "Adds a relationship to node if it does not already exist."
         if isinstance(node, (list, tuple)):
             rels = []
+
             for _node in node:
-                rels.append(self.relate(_node, type, props, **kwargs))
+                rel = self.relate(_node, type, props, direction, **kwargs)
+                rels.append(rel)
+
             return Rels(rels)
 
         relclass = kwargs.pop('relclass', self.relclass)
 
-        assert isinstance(node, Node), 'end node must be a Node instance'
-        assert isinstance(type, (str, bytes)), 'type must be a string'
+        assert isinstance(node, Node), 'End node must be a Node instance'
+        assert isinstance(type, (str, bytes)), 'Type must be a string'
+        assert direction == OUTGOING or direction == INCOMING, \
+            'A direction must be defined for the relationship'
 
-        if type in self._types and node.id in self._types[type]:
-            rel = self._rels[node.id][type]
+        rel = None
+
+        # Update the relationship if it already exists
+        if direction == OUTGOING:
+            if type in self._outgoing[node]:
+                rel = self._outgoing[node][type]
+        else:
+            if type in self._incoming[node]:
+                rel = self._incoming[node][type]
+
+        if rel:
             if props:
                 rel.update(props)
         else:
-            rel = relclass(self, node, type, props=props, **kwargs)
+            if direction == OUTGOING:
+                rel = relclass(self, node, type, props=props, **kwargs)
+            else:
+                rel = relclass(node, self, type, props=props, **kwargs)
             self._add_rel(rel)
 
         return rel
 
-    def unrelate(self, node=None, type=None):
+    def unrelate(self, node=None, type=None, **kwargs):
         "Deletes a relationship."
-        if node and type:
-            count = self._del_rels_for_node_and_type(node.id, type)
-        elif node:
-            count = self._del_rels_for_node(node.id)
-        elif type:
-            count = self._del_rels_for_type(type)
-        else:
-            count = self._del_rels()
+        direction = self._parse_direction(**kwargs)
 
-        self._prune()
+        if node and type:
+            count = self._del_rels_for_node_and_type(node, type,
+                                                     direction=direction)
+        elif node:
+            count = self._del_rels_for_node(node, direction=direction)
+        elif type:
+            count = self._del_rels_for_type(type, direction=direction)
+        else:
+            count = self._del_rels(direction=direction)
+
         return count
 
-    def related(self, node, type=None):
+    def related(self, node, type=None, **kwargs):
         "Returns true if the node is related, optionally by a type."
-        related = node.id in self._rels or self.id in node._rels
+        direction = self._parse_direction(**kwargs)
 
-        if related and type:
-            return type in self._rels[node.id] or type in node._rels[self.id]
+        if not direction or direction == OUTGOING:
+            if self._outgoing[node]:
+                if type:
+                    if type in self._outgoing[node]:
+                        return True
+                else:
+                    return True
 
-        return related
+        if not direction or direction == INCOMING:
+            if self._incoming[node]:
+                if type:
+                    if type in self._incoming[node]:
+                        return True
+                else:
+                    return True
 
-    def rels(self, node=None, type=None):
+        return False
+
+    def rels(self, node=None, type=None, **kwargs):
         "Returns relations for the node, optionally filtered by type."
+        direction = self._parse_direction(**kwargs)
+
         if node and type:
-            rels = self._get_rels_for_node_and_type(node.id, type)
+            rels = self._rels_for_node_and_type(node, type, direction)
         elif node:
-            rels = self._get_rels_for_node(node.id)
+            rels = self._rels_for_node(node, direction)
         elif type:
-            rels = self._get_rels_for_type(type)
+            rels = self._rels_for_type(type, direction)
         else:
-            rels = self._get_rels()
+            rels = self._rels(direction)
 
         return Rels(rels)
 
