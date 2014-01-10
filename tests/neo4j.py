@@ -3,6 +3,7 @@ from __future__ import absolute_import, unicode_literals
 import os
 import unittest
 from graphlib import Node, serialize
+from graphlib.serializer import convert_array_to_dict
 from graphlib import neo4j
 
 NEO4J_ENDPOINT = os.environ.get('NEO4J_ENDPOINT')
@@ -88,3 +89,7 @@ class Neo4jParserTestCase(unittest.TestCase):
     def test_load(self):
         output = neo4j.load(self.data, uri=NEO4J_ENDPOINT)
         self.assertFalse(output['errors'])
+
+    def test_parse_dict(self):
+        data = convert_array_to_dict(self.data)
+        self.assertTrue(neo4j.parse(data))

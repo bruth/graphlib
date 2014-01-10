@@ -105,3 +105,53 @@ def serialize(*args, **kwargs):
     "Convenience method one-off serialization."
     serializer = Serializer()
     return serializer.serialize(*args, **kwargs)
+
+
+def convert_array_to_dict(items):
+    "Convert an array-based format to a dict."
+    data = {
+        'nodes': [],
+        'rels': [],
+    }
+
+    nmap = {}
+    nindex = 0
+
+    for index, item in enumerate(items):
+        if 'type' in item:
+            data['rels'].append(item)
+        else:
+            data['nodes'].append(item)
+            nmap[index] = nindex
+            nindex += 1
+
+    # Map index from flat array to local node array
+    for rel in data['rels']:
+        rel['start'] = nmap[rel['start']]
+        rel['end'] = nmap[rel['end']]
+
+    return data
+
+
+def convert_dict_to_array(data):
+    "Convert a dict-based format to an array."
+    items = []
+
+    nmap = {}
+    index = 0
+
+    nodes = data.get('nodes', ())
+    rels = data.get('rels', ())
+
+    for nindex, node in enumerate(nodes):
+        items.append(node)
+        nmap[nindex] = index
+        index += 1
+
+    # Map index from local node array to flat index
+    for rel in enumerate(rels):
+        items.append(rel)
+        rel['start'] = nmap[rel['start']]
+        rel['end'] = nmap[rel['end']]
+
+    return data
