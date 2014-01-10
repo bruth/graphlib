@@ -102,6 +102,17 @@ class DictSeqTestCase(unittest.TestCase):
         # Only functions and strings
         self.assertRaises(TypeError, items.filter, 10)
 
+    def test_sort(self):
+        n0 = Node({'order': 0})
+        n1 = Node({'order': 1})
+        n2 = Node({'order': 2})
+        items = Nodes([n1, n2, n0])
+
+        self.assertCountEqual(items.sort('order'), [n0, n1, n2])
+
+        f = lambda a, b: cmp(a['order'], b['order'])
+        self.assertCountEqual(items.sort(f), [n0, n1, n2])
+
     def test_match(self):
         items = Nodes([1, 2, 13])
         self.assertCountEqual(items.match(r'1'), [1, 13])

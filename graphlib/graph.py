@@ -318,6 +318,21 @@ class DictSeq(tuple):
 
         return self.__class__(filter(func, self))
 
+    def sort(self, key):
+        """Sorts the items in this container and returns a new container.
+        The most common sorting is by property, so a key can be supplied
+        as a shorthand, otherwise a sort function must be passed.
+        """
+        if isinstance(key, (str, bytes)):
+            def func(a, b):
+                return cmp(a.props.get(key), b.props.get(key))
+        else:
+            func = key
+            if not inspect.isfunction(func):
+                raise TypeError('sort requires key or function')
+
+        return self.__class__(sorted(self, cmp=func))
+
     def match(self, regexp, flags=re.I):
         "Returns one or more items that match the regexp on the key."
         r = re.compile(regexp, flags)
