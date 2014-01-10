@@ -185,7 +185,7 @@ class DictSeqTestCase(unittest.TestCase):
 
         self.assertCountEqual(items.sort('order'), [n0, n1, n2])
 
-        f = lambda a, b: cmp(a['order'], b['order'])
+        f = lambda n: n.props.get('order')
         self.assertCountEqual(items.sort(f), [n0, n1, n2])
 
     def test_match(self):

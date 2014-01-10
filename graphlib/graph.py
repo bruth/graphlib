@@ -431,14 +431,13 @@ class DictSeq(tuple):
         as a shorthand, otherwise a sort function must be passed.
         """
         if isinstance(key, (str, bytes)):
-            def func(a, b):
-                return cmp(a.props.get(key), b.props.get(key))
+            func = lambda n: n.props.get(key)
         else:
             func = key
             if not inspect.isfunction(func):
                 raise TypeError('sort requires key or function')
 
-        return self.__class__(sorted(self, cmp=func))
+        return self.__class__(sorted(self, key=func))
 
     def match(self, regexp, flags=re.I):
         "Returns one or more items that match the regexp on the key."
