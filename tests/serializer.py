@@ -7,7 +7,7 @@ from graphlib import Node, Serializer, serialize
 class SerializeTestCase(unittest.TestCase):
     def test(self):
         s = Serializer()
-        n = Node({'foo': 'bar'})
+        n = Node({'foo': 'bar', 'bar': 1})
 
         # Add properties for coverage
         n.labels = ['Special']
@@ -38,6 +38,7 @@ class SerializeTestCase(unittest.TestCase):
         self.assertRaises(TypeError, s.serialize, None)
 
         self.assertEqual(len(s.items), 13)
+        self.assertEqual(len(s.batches), 2)
 
     def test_serialize(self):
         self.assertTrue(serialize(Node()))

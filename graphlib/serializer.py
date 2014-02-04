@@ -20,7 +20,12 @@ class Serializer(object):
         self.queue = deque()
         self.indexes = {}
         self.items = []
+        self.batches = []
         self.index = 0
+
+        # 1 - node, 2 - rel
+        self._batch = None
+        self._batch_type = None
 
     def _queue(self, item):
         if item not in self.indexes and item not in self.queue:
@@ -30,6 +35,24 @@ class Serializer(object):
                 self._queue(item.start)
                 self._queue(item.end)
                 self.queue.append(item)
+
+    def _batch_item(self, item, data):
+        item_type = 'type' in data and 2 or 1
+
+        # Append and reset the batch
+        if item_type != self._batch_type:
+            # Reset and append the reference
+            self._batch = []
+            self.batches.append(self._batch)
+            self._batch_type = item_type
+
+        self._batch.append(data)
+
+    def _add_item(self, item, data):
+        self.items.append(data)
+        self.indexes[item] = self.index
+        self.index += 1
+        self._batch_item(item, data)
 
     def _add_node(self, node):
         data = {'props': node.serialize()}
@@ -43,9 +66,7 @@ class Serializer(object):
         if node.update_props is not None:
             data['update'] = node.update_props
 
-        self.items.append(data)
-        self.indexes[node] = self.index
-        self.index += 1
+        self._add_item(node, data)
 
     def _add_rel(self, rel):
         data = {
@@ -61,9 +82,7 @@ class Serializer(object):
         if rel.update_props is not None:
             data['update'] = rel.update_props
 
-        self.items.append(data)
-        self.indexes[rel] = self.index
-        self.index += 1
+        self._add_item(rel, data)
 
     def _serialize_rel(self, rel):
         self._add_rel(rel)
