@@ -398,7 +398,7 @@ class DictSeq(tuple):
         if isinstance(key, (int, slice)):
             return tuple.__getitem__(self, key)
         elif isinstance(key, (str, bytes)):
-            key = key.lower()
+            key = str(key).lower()
         elif hasattr(key, '__iter__'):
             return Nodes(self[_key] for _key in key)
 
@@ -415,7 +415,7 @@ class DictSeq(tuple):
             def func(item):
                 if key in item:
                     if value is not None:
-                        return item[key] == value
+                        return item[str(key)] == value
                     return True
                 return False
         else:
@@ -431,7 +431,7 @@ class DictSeq(tuple):
         as a shorthand, otherwise a sort function must be passed.
         """
         if isinstance(key, (str, bytes)):
-            func = lambda n: n.props.get(key)
+            func = lambda n: n.props.get(str(key))
         else:
             func = key
             if not inspect.isfunction(func):
