@@ -29,7 +29,7 @@ CREATE_NODE_STMT = 'CREATE ({ref}{labels}{props})'
 MERGE_NODE_STMT = 'MERGE ({ref}{labels}{props}){oncreate}{onmatch}'
 
 # Cypher statement template for a relationship
-CREATE_REL_STMT = 'CREATE ({start})-[:{rtype}{props}]->({end})'
+CREATE_REL_STMT = 'CREATE ({start})-[{ref}:{rtype}{props}]->({end})'
 MERGE_REL_STMT = 'MERGE ({start})-[{ref}:{rtype}{props}]->({end}){oncreate}{onmatch}'  # noqa
 
 # Supported property value types:
